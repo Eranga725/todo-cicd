@@ -43,6 +43,6 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           context: .
-          file: my-app-cloud/Dockerfile
+          file: Dockerfile
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/todo-app:latest
