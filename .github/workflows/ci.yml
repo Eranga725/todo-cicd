@@ -49,31 +49,24 @@ jobs:
           eval $(ssh-agent -s)
           ssh-add ~/.ssh/deploy_key
 
-      # Modified SSH deployment step
       - name: Deploy to EC2
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USERNAME }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script_stop: true # Stop on errors
-          debug: true # Enable debug mode to see more details
-          script: |
-            # Test connection
-            echo "Connection successful"
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
+        run: |
+          # Set up SSH directory
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/key.pem
+          chmod 600 ~/.ssh/key.pem
 
-            # Login to ECR
-            aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${{ secrets.ECR_REPOSITORY_URI }}
+          # Add host key
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
 
-            # Pull the latest image
-            docker pull ${{ secrets.ECR_REPOSITORY_URI }}:${{ github.sha }}
-
-            # Stop and remove the old container if it exists
-            docker stop myapp || true
-            docker rm myapp || true
-
-            # Run the new container
-            docker run -d \
-              --name myapp \
-              -p 80:80 \
-              ${{ secrets.ECR_REPOSITORY_URI }}:${{ github.sha }}
+          # Execute deployment commands
+          ssh -i ~/.ssh/key.pem -o StrictHostKeyChecking=no ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} "
+            aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${{ secrets.ECR_REPOSITORY_URI }} &&
+            docker pull ${{ secrets.ECR_REPOSITORY_URI }}:${{ github.sha }} &&
+            docker stop myapp || true &&
+            docker rm myapp || true &&
+            docker run -d --name myapp -p 80:80 ${{ secrets.ECR_REPOSITORY_URI }}:${{ github.sha }}
+          "
