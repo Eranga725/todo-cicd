@@ -1,33 +1,41 @@
-name: Build and Push Docker Image to ECR
+name: Deploy to Amazon ECS
 
 on:
   push:
     branches:
-      - master 
+      - master
 
 jobs:
-  build-and-push:
-    runs-on: ubuntu-latest  
-    steps:
-    
-      - name: Checkout repository
-        uses: actions/checkout@v3  
+  deploy:
+    name: Deploy to ECS
+    runs-on: ubuntu-latest
+    environment: production
 
-      - name: Set up AWS CLI
-        uses: aws-actions/configure-aws-credentials@v1
+    steps:
+      # Checkout the repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Configure AWS credentials using GitHub Secrets
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@0e613a0980cbf65ed5b322eb7a1e075d28913a83
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Login to ECR
-        run: |
-          aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${{ secrets.ECR_REPOSITORY_URI }}
+      # Log in to Amazon ECR
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@62f4f872db3836360b72999f4b87f1ff13310f3a
 
-      - name: Build Docker Image
+      # Build Docker Image, tag it, and push to Amazon ECR
+      - name: Build, tag, and push Docker image to ECR
+        id: build-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
         run: |
-          docker build -t ${{ secrets.ECR_REPOSITORY_URI }}:latest .
-
-      - name: Push Docker Image to ECR
-        run: |
-          docker push ${{ secrets.ECR_REPOSITORY_URI }}:latest
+          docker build -t $ECR_REGISTRY/${{ secrets.ECR_REPOSITORY }}:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/${{ secrets.ECR_REPOSITORY }}:$IMAGE_TAG
+          echo "image=$ECR_REGISTRY/${{ secrets.ECR_REPOSITORY }}:$IMAGE_TAG" >> $GITHUB_OUTPUT
