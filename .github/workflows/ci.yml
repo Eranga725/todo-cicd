@@ -54,19 +54,32 @@ jobs:
           EC2_HOST: ${{ secrets.EC2_HOST }}
           EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
         run: |
-          # Set up SSH directory
           mkdir -p ~/.ssh
           echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/key.pem
           chmod 600 ~/.ssh/key.pem
-
-          # Add host key
           ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
 
-          # Execute deployment commands
-          ssh -i ~/.ssh/key.pem -o StrictHostKeyChecking=no ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} "
-            aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${{ secrets.ECR_REPOSITORY_URI }} &&
-            docker pull ${{ secrets.ECR_REPOSITORY_URI }}:${{ github.sha }} &&
-            docker stop myapp || true &&
-            docker rm myapp || true &&
-            docker run -d --name myapp -p 80:80 ${{ secrets.ECR_REPOSITORY_URI }}:${{ github.sha }}
+          ssh -i ~/.ssh/key.pem -o StrictHostKeyChecking=no ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} "\
+            set -e
+            echo 'Logging into ECR...'
+            aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${{ secrets.ECR_REPOSITORY_URI }}
+            
+            echo 'Pulling new image...'
+            docker pull ${{ secrets.ECR_REPOSITORY_URI }}:${{ github.sha }}
+            
+            echo 'Stopping old container (if exists)...'
+            docker stop myapp 2>/dev/null || true
+            docker rm myapp 2>/dev/null || true
+            
+            echo 'Starting new container...'
+            docker run -d \
+              --name myapp \
+              --restart unless-stopped \
+              -p 80:80 \
+              ${{ secrets.ECR_REPOSITORY_URI }}:${{ github.sha }}
+            
+            echo 'Cleaning up old images...'
+            docker system prune -f
+            
+            echo 'Deployment complete!'
           "
