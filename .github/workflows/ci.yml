@@ -40,15 +40,29 @@ jobs:
           docker push ${{ secrets.ECR_REPOSITORY_URI }}:$IMAGE_TAG
           echo "image=${{ secrets.ECR_REPOSITORY_URI }}:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
-      # Deploy to EC2 instance
+      # Add step to prepare SSH key
+      - name: Create SSH key file
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          eval $(ssh-agent -s)
+          ssh-add ~/.ssh/deploy_key
+
+      # Modified SSH deployment step
       - name: Deploy to EC2
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
+          script_stop: true # Stop on errors
+          debug: true # Enable debug mode to see more details
           script: |
-            # Login to ECR from EC2
+            # Test connection
+            echo "Connection successful"
+
+            # Login to ECR
             aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${{ secrets.ECR_REPOSITORY_URI }}
 
             # Pull the latest image
@@ -63,6 +77,3 @@ jobs:
               --name myapp \
               -p 80:80 \
               ${{ secrets.ECR_REPOSITORY_URI }}:${{ github.sha }}
-
-            # Clean up old images
-            docker system prune -f
