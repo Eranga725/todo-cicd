@@ -56,7 +56,7 @@ jobs:
         id: register-task-def
         run: |
           aws ecs register-task-definition \
-            --cli-input-json file://updated-task-definition.json
+            --cli-input-json file://task-definition-cleaned.json
 
       - name: Deploy ECS Task Definition
         uses: aws-actions/amazon-ecs-deploy-task-definition@df9643053eda01f169e64a0e60233aacca83799a
