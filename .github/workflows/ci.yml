@@ -40,28 +40,34 @@ jobs:
           docker push ${{ secrets.ECR_REPOSITORY_URI }}:$IMAGE_TAG
           echo "image=${{ secrets.ECR_REPOSITORY_URI }}:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
+      # Fetch ECS Task Definition
       - name: Fetch ECS Task Definition
         id: fetch-task-def
         run: |
           aws ecs describe-task-definition \
             --task-definition ${{ secrets.ECS_TASK_DEFINITION }} \
             --query taskDefinition > task-definition.json
-          
+
+      # Clean Task Definition File
       - name: Clean Task Definition File
         id: clean-task-def
         run: |
           jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' task-definition.json > task-definition-cleaned.json
-      
+
+      # Register New ECS Task Definition Revision
       - name: Register New ECS Task Definition Revision
         id: register-task-def
         run: |
-          aws ecs register-task-definition \
-            --cli-input-json file://task-definition-cleaned.json
+          TASK_DEF_ARN=$(aws ecs register-task-definition \
+            --cli-input-json file://task-definition-cleaned.json \
+            --query 'taskDefinition.taskDefinitionArn' --output text)
+          echo "task-definition=$TASK_DEF_ARN" >> $GITHUB_ENV
 
+      # Deploy ECS Task Definition
       - name: Deploy ECS Task Definition
         uses: aws-actions/amazon-ecs-deploy-task-definition@df9643053eda01f169e64a0e60233aacca83799a
         with:
-          task-definition: ${{ steps.register-task-def.outputs.task-definition }}
+          task-definition: ${{ env.task-definition }}
           service: ${{ secrets.ECS_SERVICE }}
           cluster: ${{ secrets.ECS_CLUSTER }}
           wait-for-service-stability: true
