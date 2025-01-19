@@ -47,12 +47,11 @@ jobs:
             --task-definition ${{ secrets.ECS_TASK_DEFINITION }} \
             --query taskDefinition > task-definition.json
           
-      - name: Modify ECS Task Definition
-        id: modify-task-def
+      - name: Clean Task Definition File
+        id: clean-task-def
         run: |
-          jq '.containerDefinitions[0].image = "${{ steps.build-image.outputs.image }}"' task-definition.json > updated-task-definition.json
-          cat updated-task-definition.json
-
+          jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' task-definition.json > task-definition-cleaned.json
+      
       - name: Register New ECS Task Definition Revision
         id: register-task-def
         run: |
