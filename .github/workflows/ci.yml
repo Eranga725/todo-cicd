@@ -75,7 +75,7 @@ jobs:
             docker run -d \
               --name myapp \
               --restart unless-stopped \
-              -p 3000:80 \
+              -p 80:3000 \
               ${{ secrets.ECR_REPOSITORY_URI }}:${{ github.sha }}
             
             echo 'Cleaning up old images...'
